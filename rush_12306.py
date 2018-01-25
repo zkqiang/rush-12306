@@ -72,7 +72,7 @@ class TrainTicket(object):
 
     def purchase(self):
         """提示补充筛选条件后开始抢票"""
-        input('请在网页补充购票筛选条件，确认无误后按回车继续：')
+        input('请在网页补充筛选条件(日期、乘车人、车次、席别等)，确认无误后按回车继续：')
         print('开始抢票，如需暂停请删除乘车人，除此之外请不要做其他网页操作')
         # 进入循环抢票
         self._cycle()
@@ -93,8 +93,8 @@ class TrainTicket(object):
             query_errors = self.browser.find_elements_by_class_name('no-ticket')
             # 定位查询按钮
             query_button = self.browser.find_element_by_id('query_ticket')
-            # 定位提交信息界面
-            submit_info = self.browser.find_element_by_id('orange_msg')
+            # 定位提交订单窗口
+            submit_box = self.browser.find_element_by_id('orange_msg')
             # 定位中间的车次信息栏
             sear_result = self.browser.find_element_by_id('sear-result')
 
@@ -113,7 +113,7 @@ class TrainTicket(object):
                     return self.purchase()
 
                 # 等待车次信息加载出来
-                time.sleep(0.05)
+                time.sleep(0.1)
                 WebDriverWait(self.browser, 15).until(EC.visibility_of(sear_result))
 
                 # 判断查询后是否出现其他各种出错提示
@@ -122,16 +122,24 @@ class TrainTicket(object):
                         print('查询出错，请修改筛选条件')
                         return self.purchase()
 
-                # 出现订单提交页面，等待页面消失
-                time.sleep(0.05)
-                if submit_info.is_displayed():
-                    WebDriverWait(self.browser, 30).until_not(
-                        EC.visibility_of(submit_info))
-                    # 获取订票失败的提示页面的按钮，如果存在点击，不存在则订票成功
+                # 判断是否出现订单提交窗口
+                if submit_box.is_displayed():
+                    print('查询到车次，正在提交订单')
+                    # 等待提交窗口
+                    WebDriverWait(self.browser, 15).until_not(EC.visibility_of(submit_box))
+                    # 等待加载图片消失
+                    WebDriverWait(self.browser, 10).until_not(EC.visibility_of(
+                        self.browser.find_element_by_xpath('//div[@dhxbox="1"]')))
                     try:
+                        # 获取订票失败的提示页面的按钮，如果存在点击，不存在则订票成功
                         self.browser.find_element_by_id('qr_closeTranforDialog_id').click()
+                        print('抢票失败，继续循环')
                     except NoSuchElementException:
+                        # DOM里存在支付按钮说明成功进入支付界面，抢票成功
+                        WebDriverWait(self.browser, 20).until(
+                            EC.presence_of_element_located((By.ID, 'payButton')))
                         print('抢票成功，请尽快在30分钟内支付')
+                        # 判断邮件通知是否被打开
                         if NOTIFICATION_EMAIL:
                             self._notice_to_pay()
 
