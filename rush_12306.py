@@ -73,12 +73,12 @@ class TrainTicket(object):
     def purchase(self):
         """提示补充筛选条件后开始抢票"""
         input('请在网页补充筛选条件(日期、乘车人、车次、席别等)，确认无误后按回车继续：')
-        print('开始抢票，如需暂停请删除乘车人，除此之外请不要做其他网页操作')
         # 进入循环抢票
         self._cycle()
 
     def _cycle(self):
         """抢票循环"""
+        print('开始抢票，如需暂停可删除乘车人，除此之外请不要做其他网页操作')
         try:
             # 展开订单帮手
             show_more_button = self.browser.find_element_by_id('show_more')
@@ -127,33 +127,35 @@ class TrainTicket(object):
                     print('查询到车次，正在提交订单')
                     # 等待提交窗口
                     WebDriverWait(self.browser, 15).until_not(EC.visibility_of(submit_box))
-                    # 等待加载图片消失
-                    WebDriverWait(self.browser, 10).until_not(EC.visibility_of(
-                        self.browser.find_element_by_xpath('//div[@dhxbox="1"]')))
-                    try:
-                        # 获取订票失败的提示页面的按钮，如果存在点击，不存在则订票成功
-                        self.browser.find_element_by_id('qr_closeTranforDialog_id').click()
+                    # 等待交易提示框出现
+                    WebDriverWait(self.browser, 15).until(
+                        EC.visibility_of_element_located((By.ID, 'content_transforNotice_id')))
+                    # 获取订票失败的提示页面的按钮，如果存在点击
+                    if re.search(r'qr_closeTranforDialog_id', self.browser.page_source):
                         print('抢票失败，继续循环')
-                    except NoSuchElementException:
-                        # DOM里存在支付按钮说明成功进入支付界面，抢票成功
+                        self.browser.find_element_by_id('qr_closeTranforDialog_id').click()
+                    else:
+                        # 如果出现支付按钮，则表明已经抢票成功
                         WebDriverWait(self.browser, 20).until(
                             EC.presence_of_element_located((By.ID, 'payButton')))
                         print('抢票成功，请尽快在30分钟内支付')
-                        # 判断邮件通知是否被打开
+                        # 判断通知邮件是否打开，若打开启动方法
                         if NOTIFICATION_EMAIL:
-                            self._notice_to_pay()
+                            self.notice_to_pay()
+                        input('如想继续抢票，可返回上一页补充筛选条件后，按回车继续：')
+                        break
 
                 # 循环点击查询按钮的随机间隔
                 time.sleep(random.uniform(MIN_INTERVAL, MAX_INTERVAL))
 
         except (NoSuchElementException, TimeoutException, WebDriverException):
             # 出现异常后打印异常重新开始
-            print('程序出现异常，具体如下：\n%s\n等待30秒后重试' % traceback.format_exc())
-            time.sleep(30)
+            print('程序出现异常，具体如下：\n%s\n等待10秒后重试' % traceback.format_exc())
+            time.sleep(10)
             return self._cycle()
 
     @staticmethod
-    def _notice_to_pay():
+    def notice_to_pay():
         """抢票成功的邮件通知，可选功能"""
         import smtplib
         from email.header import Header
@@ -178,7 +180,6 @@ class TrainTicket(object):
         print('支付通知邮件已发送')
 
     def run(self):
-        print('正在进入12306，在出现下个提示前，请不要操作网页')
         self.login()
         self.purchase()
 
